@@ -1,0 +1,344 @@
+---
+title: 'Project: Exploratory Data Analysis and Machine Learning'
+author: "Anshul Kumar"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    highlight: tango
+  html: default
+linkcolor: black
+always_allow_html: yes
+link_attributes:
+  style: 'color: blue;'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+This data analysis project will explore the dataset "Marketing Analytics", which contains information on 2205 customers of XYZ company, including their customer profiles, product preferences, campaign successes/failures, and channel performance.
+
+**Question:**  
+
+Given the Marketing Analytics dataset, can we accurately predict the total amount spent by the families in the last two years based on the variables like age, income and number of children in a household. 
+
+```{r}
+marketing_data <- read.csv("ifood_df.csv")
+head(marketing_data)
+```
+## Data Preparation and Cleaning
+
+```{r}
+colnames(marketing_data)
+```
+**Column Description**:
+
+**Income** - Customer's annual family income
+
+**Kidhome** - Number of children in the customer's family
+
+**Teenhome** - Number of teenagers in the customer's family
+
+**Recency** - Number of days since the last purchase
+
+**MntWines** - Amount spent on wines in the last 2 years
+
+**MntFruits** - Amount spent on fruits in the last 2 years
+
+**MntMeatProducts** - Amount spent on meat products in the last 2 years
+
+**MntFishProducts** - Amount spent on fish products in the last 2 years
+
+**MntSweetProducts** - Amount spent on sweet products in the last 2 years
+
+**MntGoldProds** - Amount spent on gold products in the last 2 years
+
+**NumDealsPurchases** - Number of purchases made with a discount
+
+**NumWebPurchases** - Number of purchases made through the company's website
+
+**NumCatalogPurchases** - Number of purchases made using catalogs
+
+**NumStorePurchases** - Number of purchases made directly in stores
+
+**NumWebVisitsMonth** - Number of visits to the company's website in the last month
+
+**AcceptedCmp3** - 1 if the customer accepted the offer in the 3rd campaign, 0 otherwise
+
+**AcceptedCmp4** - 1 if the customer accepted the offer in the 4th campaign, 0 otherwise
+
+**AcceptedCmp5** - 1 if the customer accepted the offer in the 5th campaign, 0 otherwise
+
+**AcceptedCmp1** - 1 if the customer accepted the offer in the 1st campaign, 0 otherwise
+
+**AcceptedCmp2** - 1 if the customer accepted the offer in the 2nd campaign, 0 otherwise
+
+**Complain** - 1 if the customer complained in the last 2 years
+
+**Z_CostContact** - ????
+
+**Z_Revenue** - ????
+
+**Response (Target)** - 1 if the customer accepted the offer in the last campaign, 0 otherwise
+
+**Age** - Customer's age
+
+**Customer_Days** - Days since customer's registration
+
+**marital_Divorced** - Customer's marital status is divorced
+
+**marital_Married** - Customer's marital status is married
+
+**marital_Single** - Customer's marital status is single
+
+**marital_Together** - Customer's marital status is together
+
+**marital_Widow** - Customer's marital status is widow
+
+**education_2n - Cycle** - Customer's education level is 2nd cycle
+
+**education_Basic** - Customer's education level is basic
+
+**education_Graduation** - Customer's education level is graduation
+
+**education_Master** - Customer's education level is master's
+
+**education_PhD** - Customer's education level is PhD
+
+**MntTotal** - Total amount spent in the last 2 years
+
+**MntRegularProds** - Amount spent on regular products in the last 2 years
+
+**AcceptedCmpOverall** - Sum of AcceptedCmp campaigns
+
+**Checking for missing value(s)**
+
+```{r}
+colSums(is.na(marketing_data))
+```
+No column in the dataframe `marketing_data` have any missing value.
+
+**Checking data types for columns**
+
+```{r}
+str(marketing_data)
+```
+All the columns in the dataframe have appropriate data types. Hence, we don't need to change the data type of any of the variables.
+
+**Checking for unique values**
+
+```{r}
+for (i in colnames(marketing_data)){
+  print(sprintf("%s - %.0f", i, length(unique(marketing_data[[i]]))), quote = FALSE)
+}
+```
+We can see that variables `Z_CostContact` and `Z_Revenue` have same value for all the columns. Therefore, removing them from the dataframe will not affect our analysis.
+
+```{r}
+marketing_data = subset(marketing_data, select = -c(Z_CostContact, Z_Revenue))
+colnames(marketing_data)
+```
+## Data Exploration
+
+**Box plot of income for divorced v/s non-divorced**
+
+```{r, warning=FALSE}
+library(ggplot2)
+
+labels <- c("0" = "Non-divorced", "1" = "Divorced")
+ggplot(marketing_data, aes(x = marital_Divorced, y = Income)) +
+  geom_boxplot(fill = "lightblue") +
+  ggtitle("Income for Divorced v/s Non-divorced") +
+  xlab("Marital Status") +
+  ylab("Income") +
+  facet_wrap(~marital_Divorced, scales = "free_x", labeller = as_labeller(labels))
+```
+We can see that even though the median income of **divorced** is slightly more than **non-divorced**, the maximum income (uppermost quantile) is far more for **non-divorced** than **divorced**.
+
+**Histogram for Income**
+
+```{r, message=FALSE}
+library(ggplot2)
+
+ggplot(marketing_data, aes(x = Income)) +
+  geom_histogram(aes(y = after_stat(density)), fill = "#69b3a2", color = "#e9ecef", alpha = 0.9) +
+  geom_density() +
+  ggtitle("Histogram with KDE for Income") +
+  xlab("Income") +
+  ylab("Frequency")
+```
+We can observe from the above histogram that income distribution closely resembles the normal distribution. We can also note that there are no outliers as well.
+
+**Box plot for MntTotal**
+
+`MntTotal` is the total amount spent on all products over last two years.
+
+```{r}
+library(ggplot2)
+
+ggplot(marketing_data, aes(y = MntTotal)) +
+  geom_boxplot(fill = "lightgreen") +
+  ggtitle("Box Plot of Total Amount Spent") +
+  ylab("MntTotal")
+```
+We can observe that there are a few outliers.
+
+To remove the outliers, we can use interquartile range. Interquantile range is the difference between 1st quantile (25th percentile) and 3rd quantile (75th percentile).
+
+```{r}
+Q1 <- quantile(marketing_data$MntTotal, 0.25)
+Q3 <- quantile(marketing_data$MntTotal, 0.75)
+IQR <- Q3 - Q1
+lower <- Q1 - 1.5 * IQR
+upper <- Q3 + 1.5 * IQR
+outliers <- marketing_data[(marketing_data$MntTotal < lower) | (marketing_data$MntTotal > upper), ]
+head(outliers)
+```
+
+**Removing outliers:**
+
+```{r}
+marketing_data <- marketing_data[(marketing_data$MntTotal < upper) & marketing_data$MntTotal > lower, ]
+summary(marketing_data$MntTotal)
+```
+
+**Histogram for age**
+
+```{r, message=FALSE}
+library(ggplot2)
+
+ggplot(marketing_data, aes(x = Age)) +
+  geom_histogram(aes(y = after_stat(density)), fill = '#f08080', color = '#e9ecef', alpha = 0.9) +
+  geom_density() +
+  ggtitle("Histogram for Age") +
+  xlab("Age") +
+  ylab("Frequency")
+```
+We can see from the above graph that the most responsive age group is 45 to 49 years old.
+
+Now, we will explore the correlation between important **numerical features** in the dataframe `marketing_data` and total amount spent `MntTotal`.
+
+We will use chart.Correlation() function from "PerformanceAnalytics" library to get correlation between the variables and their distribution as well.
+
+The correlation calculated by chart.Correlation() function calculates **Pearson Correlation Coefficient** by default, which tells the linear correlation between the variables. Therefore, we have to keep in mind that if there exists a strong non-linear correlation between variables, the **Pearson Correlation Coefficient** will be 0.
+
+```{r, warning=FALSE, message=FALSE}
+library(PerformanceAnalytics)
+
+cor_chart <- marketing_data[, c("MntTotal", "Income", "Age", "Kidhome", "Teenhome")]
+chart.Correlation(cor_chart, histogram = TRUE, pch = 19)
+```
+From the graph above, we can see that:  
+
+- The total amount of money spent `MntTotal` is strongly correlated to `Income`.  
+
+- There is a moderate negative relationship between `MntTotal` and the number of children in the household (`Kidhome`).  
+
+- The negative correlation between `Kidhome` and `Income` is nearly the same as the negative correlation between `Kidhome` and `MntTotal`.  
+
+## Linear Modelling
+
+Now we will analyze `MntTotal` and `Income` further using linear modelling. 
+
+```{r}
+marketing_lm <- lm(Income ~ MntTotal, data = marketing_data)
+summary(marketing_lm)
+```
+From the above linear model summary, we can conclude the following points:
+
+- Under **Coefficients** section, The "Estimate" column provides the Least Squares estimate for the fitted line.  
+
+- Equation of fitted line:
+\[ \text{MntTotal} = 34909.347 + 29.741 \times \text{Income} \]
+
+- "Standard Error" is the average amount that the estimate varies from our actual value.
+
+- "t-value" is a measure of how far an estimate is from zero, in units of standard errors. It is calculated by dividing the estimate by its standard error. The higher the t-value, the more likely it is that the estimate is different from zero by chance.
+
+- "p-values" are calculated based on the t-value and standard error, and if the p-value is less than or equal to 0.05, then the coefficient is statistically significant. In our case, p-value is extremely low (< 2.2e-16).
+
+Hence, we can conclude that there is a direct relation between `Income` and `MntTotal`.
+
+**Visualizing the linear model**
+
+```{r, message=FALSE}
+library(ggplot2)
+
+ggplot(data = marketing_data, aes(x = MntTotal, y = Income)) + geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) +
+  ggtitle("Linear Model MntTotal v/s Income") +
+  xlab("Total Amount Spent") +
+  ylab("Income")
+```
+
+## Supervised Machine learning - Linear Regression
+
+Till now, we have cleaned the data, analyzed the `MntTotal` column whether it is linear or not, and removed outliers from the column.
+
+Now, we can create a **Linear Regression** model, in which we can try predicting the values of `MntTotal` based on the variables we used to create correlation chart, which include `Income`, `Age`, `Kidhome`, `Teenhome`.
+
+We will first split the data into 80% training and 20% test sets, and then create a linear model for the training set.
+
+```{r, warning=FALSE, message=FALSE}
+library(dplyr)
+
+marketing_data_subset <- marketing_data[, c("MntTotal", "Income", "Age", "Kidhome", "Teenhome")]
+
+set.seed(123)  #For reproducibility
+
+train_index <- sample(seq_len(nrow(marketing_data_subset)), size = 0.8 * nrow(marketing_data_subset))
+train_data <- marketing_data_subset[train_index, ]
+test_data <- marketing_data_subset[-train_index, ]
+
+model <- lm(MntTotal ~ ., data = train_data)
+
+summary(model)
+```
+From the above summary, we can conclude that:
+
+- The linear regression model is a fine fit for the data, with an R-squared value of 0.7367. This indicates that the model explains 73.67% of the variation in the total amount of money spent on marketing.
+
+- All of the independent variables in the model are statistically significant (except for `Age`), with p-values less than 0.05. This means that they are all significantly associated with the total amount of money spent on marketing.
+
+- The number of children in the household (`Kidhome` and `Teenhome`) have negative and statistically significant effects on the total amount of money spent. This means that people with more children tend to spend less money in general.
+
+Now that we have trained our model on `train_data`, we can use it to make prediction on the `test_data`.
+
+```{r}
+predictions <- predict(model, newdata = test_data)
+results <- data.frame(Actual = test_data$MntTotal, Predicted = predictions)
+head(results, 10)
+```
+Furthermore, we can use Mean Square Error (MSE) value to get an idea of how well the model predicts the target variable, `MntTotal` in our case.
+
+```{r}
+residuals <- test_data$MntTotal - predictions
+mse <- mean(residuals^2)
+
+mse
+```
+A Mean Square Error (MSE) of 104581.9 means that the model’s predictions are, on average, approximately 323.7 units away from the actual values (since the square root of 104581.9 is about 323.7).
+
+Hence, we can conclude that although the model is a fine fit for the dataframe `marketing_data`, other machine learning models might be able to provide a better fit.
+
+## Summary
+
+This project aimed to analyze the relationship between various variables in the data set, especially the total amount spent in the last 2 years (`MntTotal`) and other features like `Age`, `Income`, etc. Additionally, using a linear regression machine learning model, we were able to predict the `MntTotal` amount using the variables 
+`Income`, `Age`, `Kidhome` and `Teenhome` with an R-squared value of 0.7367 (73.67%) and Mean Square Error (MSE) of 104581.9.
+
+## Potential areas for further investigation
+
+- Effect of binary variables like `marital_Divorced`, `marital_Married`, etc., on `MntTotal`.
+
+- Analysis of educational impact on income.
+
+- Analysis of other significant variables like `MntWines`, `MntFruits`, etc.
+
+- Testing other machine learning algorithms for better prediction of `MntTotal`.
+
+## Citation
+Daoud, J. (2021, July). Marketing Data, Version 1. Retrieved October 31, 2023 from [Kaggle](https://www.kaggle.com/datasets/jackdaoud/marketing-data).
+
+
+
